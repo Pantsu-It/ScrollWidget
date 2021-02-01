@@ -1,65 +1,39 @@
 package com.pantsu.scrollwidget.view;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import android.os.Bundle;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.TextView;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.pantsu.scrollwidget.R;
+import com.pantsu.scrollwidget.view.data.MyListAdapter;
+import com.pantsu.scrollwidget.view.view.NestedScrollRefreshLayout;
 
 public class MainActivityCopy extends AppCompatActivity {
 
+
+  private PageList mPageList;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main_copy);
 
+    MyListAdapter adapter = new MyListAdapter();
     RecyclerView recyclerView = findViewById(R.id.recycler_view);
     recyclerView.setLayoutManager(new LinearLayoutManager(this));
-    recyclerView.setAdapter(new MyListAdapter());
-  }
+    recyclerView.setAdapter(adapter);
 
-  private static class MyListAdapter extends RecyclerView.Adapter<TextViewHolder> {
+    PageList pageList = new PageList((NestedScrollRefreshLayout) recyclerView.getParent(), recyclerView, adapter);
+    mPageList = pageList;
 
-    private List<String> mData = new ArrayList<>();
-
-    {
-      for (int i = 0; i < 40; ++i) {
-        mData.add("哈哈哈哈哈哈哈哈哈哈哈哈嘿嘿  ->" + i);
+    NestedScrollRefreshLayout nestedScrollRefreshLayout = findViewById(R.id.refresh_layout);
+    nestedScrollRefreshLayout.addOnRefreshListener(direction -> {
+      if (direction == NestedScrollRefreshLayout.Direction.TOP) {
+        mPageList.loadMoreOld();
+      } else if (direction == NestedScrollRefreshLayout.Direction.BOTTOM) {
+        mPageList.loadMoreNew();
       }
-    }
-
-    @NonNull
-    @Override
-    public TextViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-      View view = View.inflate(parent.getContext(), R.layout.item_text_main, null);
-      return new TextViewHolder(view);
-    }
-
-    @Override
-    public void onBindViewHolder(@NonNull TextViewHolder holder, int position) {
-      TextView textView = holder.itemView.findViewById(R.id.text);
-      textView.setText(mData.get(position));
-    }
-
-    @Override
-    public int getItemCount() {
-      return mData.size();
-    }
-  }
-
-  private static class TextViewHolder extends RecyclerView.ViewHolder {
-
-    public TextViewHolder(@NonNull View itemView) {
-      super(itemView);
-    }
+    });
   }
 }

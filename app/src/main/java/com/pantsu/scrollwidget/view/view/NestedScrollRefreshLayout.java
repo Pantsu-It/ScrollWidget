@@ -1,6 +1,10 @@
 package com.pantsu.scrollwidget.view.view;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.util.AttributeSet;
@@ -11,16 +15,17 @@ import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver;
 import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
-import androidx.core.view.NestedScrollingChild;
-import androidx.core.view.NestedScrollingParent;
+import androidx.annotation.Nullable;
+import androidx.core.view.NestedScrollingChild2;
+import androidx.core.view.NestedScrollingParent2;
 import androidx.core.view.NestedScrollingParentHelper;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.pantsu.scrollwidget.R;
 
-public class NestedScrollRefreshLayout extends LinearLayout implements NestedScrollingParent {
+public class NestedScrollRefreshLayout extends LinearLayout implements NestedScrollingParent2 {
 
-  private static final long ANIMATE_TO_LOAD_DURATION = 300L;
   private static final long ANIMATE_TO_START_DURATION = 300L;
 
   private enum ScrollState {
@@ -29,35 +34,32 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
     SHOW_BOTTOM
   }
 
-  private enum RefreshDirection {
-    REFRESH_TOP,
-    REFRESH_BOTTOM
+  public enum Direction {
+    TOP,
+    BOTTOM
   }
 
-  public interface OnRefreshLayout {
-    void onRefresh(RefreshDirection direction);
+  public interface OnRefreshListener {
+    void onRefresh(Direction direction);
   }
 
-  public interface OnRefreshStatusLayout {
-
-  }
-
-  private RecyclerView mRecyclerView;
-  private View mTopView, mBottomView;
+  private RecyclerView mTargetView;
+  private View mTopRefreshView, mBottomRefreshView;
 
   private NestedScrollingParentHelper mNestedScrollHelper;
-  private int mTopHeight, mBottomHeight;
-  private int mMinScrollY, mOriginScrollY, mMaxScrollY;
+  private int mTopViewHeight, mBottomViewHeight;
+  private int mStartPosition;
+  private int mTopPosition, mBottomPosition;
+
   private int mTouchSlop;
 
   /** 滑动状态 */
   private ScrollState mScrollState = ScrollState.NONE;
 
   /** 过渡到Loading状态的动画 */
-  private Animator mRefreshPreAnimator;
+  private Animator mRefreshAnimator;
 
-  private long mAnimateToLoadDuration = ANIMATE_TO_LOAD_DURATION;
-  private long mAnimateToStartDuration = ANIMATE_TO_START_DURATION;
+  private long mAnimateToRefreshDuration = ANIMATE_TO_START_DURATION;
 
   public NestedScrollRefreshLayout(Context context) {
     super(context);
@@ -73,12 +75,11 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   @Override
   protected void onFinishInflate() {
     super.onFinishInflate();
-    mRecyclerView = findViewById(R.id.recycler_view);
-    mRecyclerView.addOnScrollListener(mRecyclerScrollListener);
-//    mRecyclerView.setOnFlingListener(mRecyclerFlingListener);
+    mTargetView = findViewById(R.id.recycler_view);
+    mTargetView.addOnScrollListener(mOnScrollListener);
 
-    mTopView = getChildAt(0);
-    mBottomView = getChildAt(getChildCount() - 1);
+    mTopRefreshView = getChildAt(0);
+    mBottomRefreshView = getChildAt(getChildCount() - 1);
 
     getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
       @Override
@@ -90,63 +91,91 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   }
 
   private void initParam() {
-    mTopHeight = mTopView.getMeasuredHeight();
-    mBottomHeight = mBottomView.getMeasuredHeight();
-    mMinScrollY = 0;
-    mOriginScrollY = mTopHeight;
-    mMaxScrollY = mTopHeight + mBottomHeight;
+    mTopViewHeight = mTopRefreshView.getMeasuredHeight();
+    mBottomViewHeight = mBottomRefreshView.getMeasuredHeight();
+    mTopPosition = 0;
+    mStartPosition = mTopViewHeight;
+    mBottomPosition = mTopViewHeight + mBottomViewHeight;
 
-    mRecyclerView.getLayoutParams().height = getHeight();
-    mRecyclerView.requestLayout();
-    scrollTo(mTopHeight);
+    mTargetView.getLayoutParams().height = getHeight();
+    mTargetView.requestLayout();
+    scrollTo(mTopViewHeight);
   }
 
-  private int mLastScrollState;
-  private int mLastFlingVelocity;
+  private boolean mIsRefreshing;
+  private Direction mRefreshingDirection;
 
-  private RecyclerView.OnScrollListener mRecyclerScrollListener = new RecyclerView.OnScrollListener() {
-    @Override
-    public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
-      super.onScrollStateChanged(recyclerView, newState);
-//      Log.i("foobar", "scroll_state:" + newState);
-      if (mLastScrollState == RecyclerView.SCROLL_STATE_SETTLING
-          && newState == RecyclerView.SCROLL_STATE_IDLE
-          && mLastFlingVelocity > 100) {
-        Log.i("foobar", "mLastFlingV:" + mLastFlingVelocity);
+  public boolean isRefreshing() {
+    return mIsRefreshing;
+  }
 
-      }
-      if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-        mLastFlingVelocity = 0;
-      }
-      mLastScrollState = newState;
+  private boolean mShowTopRefreshView = true;
+  private boolean mShowBottomRefreshView = true;
+
+  public void setShowTopRefreshView(boolean showTopRefreshView) {
+    mShowTopRefreshView = showTopRefreshView;
+  }
+
+  public void setShowBottomRefreshView(boolean showBottomRefreshView) {
+    mShowBottomRefreshView = showBottomRefreshView;
+  }
+
+  public int getTargetViewOffset() {
+    return Math.abs(getPosition() - mStartPosition);
+  }
+
+  public void startRefreshing(Direction direction) {
+    if (mIsRefreshing && mRefreshingDirection == direction) {
+      return;
     }
-
-    @Override
-    public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
-      super.onScrolled(recyclerView, dx, dy);
+    if (mRefreshAnimator != null && mRefreshAnimator.isStarted()) {
+      mRefreshAnimator.cancel();
     }
-  };
+    mIsRefreshing = true;
+    mRefreshingDirection = direction;
+    animateToRefreshingPosition(direction);
+  }
 
-  private RecyclerView.OnFlingListener mOnFlingListener = new RecyclerView.OnFlingListener() {
-    @Override
-    public boolean onFling(int velocityX, int velocityY) {
-      return false;
+  public void stopRefreshing(boolean animation) {
+    if (!mIsRefreshing && mRefreshAnimator == null) {
+      return;
     }
-  };
+    if (mRefreshAnimator != null && mRefreshAnimator.isStarted()) {
+      mRefreshAnimator.cancel();
+      mRefreshAnimator = null;
+    }
+    mIsRefreshing = false;
+    mRefreshingDirection = null;
+    resetToStartPosition(animation);
+  }
 
   /** 通过target参数判断ChildView以及滚动方向，决定是否进行嵌套滚动 */
   @Override
-  public boolean onStartNestedScroll(View child, View target, int nestedScrollAxes) {
-    return target instanceof NestedScrollingChild;
+  public boolean onStartNestedScroll(@NonNull View child, @NonNull View target, int axes, int type) {
+    if (!isEnabled() || !(target instanceof NestedScrollingChild2)) {
+      return false;
+    }
+    /** FIX：滑动速度较大时，FLING状态一直被 NestedScrollParent 假消费，导致直到滑动停止的耗时长达数秒 */
+    if (type == ViewCompat.TYPE_NON_TOUCH
+        && (getPosition() < mStartPosition && !canScrollVertically(-1)
+        || getPosition() > mStartPosition && !canScrollVertically(1))) {
+      return false;
+    }
+    return true;
   }
 
   @Override
-  public void onNestedScrollAccepted(View child, View target, int nestedScrollAxes) {
-    mNestedScrollHelper.onNestedScrollAccepted(child, target, nestedScrollAxes);
+  public void onNestedScrollAccepted(@NonNull View child, @NonNull View target, int axes, int type) {
+    mNestedScrollHelper.onNestedScrollAccepted(child, target, axes);
   }
 
   @Override
-  public void onStopNestedScroll(View target) {
+  public void onNestedScroll(@NonNull View target, int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed, int type) {
+    onNestedScroll(target, dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed);
+  }
+
+  @Override
+  public void onStopNestedScroll(@NonNull View target, int type) {
     mNestedScrollHelper.onStopNestedScroll(target);
   }
 
@@ -156,122 +185,198 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   }
 
   @Override
-  public void onNestedPreScroll(View target, int deltaX, int deltaY, int[] consumed) {
-    if (deltaY == 0) {
+  public void onNestedPreScroll(@NonNull View target, int dx, int dy, @NonNull int[] consumed, int type) {
+    if (dy == 0) {
       return;
     }
-    Log.i("foobar", "dy:" + deltaY + " getScrollY():" + getScrollY());
-    final int scrollY = getScrollY();
-
-    if (mScrollState == ScrollState.NONE) {
-      if (scrollY < mOriginScrollY || scrollY == mOriginScrollY && deltaY < 0) {
-        mScrollState = ScrollState.SHOW_TOP;
-      } else if (scrollY > mOriginScrollY || scrollY == mOriginScrollY && deltaY > 0) {
-        mScrollState = ScrollState.SHOW_BOTTOM;
-      }
-    }
-
+    Log.i("touch-me", "onNestedPreScroll");
     switch (mScrollState) {
       case NONE:
         break;
       case SHOW_TOP:
-        handleNestedScrollTop(deltaY, consumed);
+        handleNestedScrollTop(dy, consumed);
         break;
       case SHOW_BOTTOM:
-        handleNestedScrollBottom(deltaY, consumed);
+        handleNestedScrollBottom(dy, consumed);
         break;
     }
   }
 
   private void handleNestedScrollTop(int deltaY, int[] consumed) {
-    if (getScrollY() <= mOriginScrollY && !mRecyclerView.canScrollVertically(-1)) {//展开Top
-      int targetScrollY = getScrollY() + deltaY;
-      if (targetScrollY < mMinScrollY) {
-        targetScrollY = mMinScrollY;
+    if (!mShowTopRefreshView) {
+      return;
+    }
+    if (getPosition() <= mStartPosition && !mTargetView.canScrollVertically(-1)) {//展开Top
+      int targetPosition = getPosition() + deltaY;
+      if (targetPosition < mTopPosition) {
+        targetPosition = mTopPosition;
       }
-      if (targetScrollY > mOriginScrollY) {
-        targetScrollY = mOriginScrollY;
+      if (targetPosition > mStartPosition) {
+        targetPosition = mStartPosition;
       }
-      scrollTo(targetScrollY);
+      scrollTo(targetPosition);
       consumed[1] = deltaY;
     }
   }
 
   private void handleNestedScrollBottom(int deltaY, int[] consumed) {
-    if (getScrollY() >= mOriginScrollY && !mRecyclerView.canScrollVertically(1)) {
-      int targetScrollY = getScrollY() + deltaY;
-      if (targetScrollY > mMaxScrollY) {
-        targetScrollY = mMaxScrollY;
+    if (!mShowBottomRefreshView) {
+      return;
+    }
+    if (getPosition() >= mStartPosition && !mTargetView.canScrollVertically(1)) {
+      int targetPosition = getPosition() + deltaY;
+      if (targetPosition > mBottomPosition) {
+        targetPosition = mBottomPosition;
       }
-      if (targetScrollY < mOriginScrollY) {
-        targetScrollY = mOriginScrollY;
+      if (targetPosition < mStartPosition) {
+        targetPosition = mStartPosition;
       }
-      scrollTo(targetScrollY);
+      scrollTo(targetPosition);
       consumed[1] = deltaY;
     }
   }
 
+  private RecyclerView.OnScrollListener mOnScrollListener = new RecyclerView.OnScrollListener() {
+    @Override
+    public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+      if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+        final int diff = Math.abs(getPosition() - mStartPosition);
+        if (diff < mTouchSlop) {
+          resetToStartPosition(false);
+        } else {
+          final Direction direction = getTargetRefreshDirection();
+          mIsRefreshing = true;
+          mRefreshingDirection = direction;
+          animateToRefreshingPosition(direction);
+        }
+      }
+    }
+
+    @Override
+    public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+      super.onScrolled(recyclerView, dx, dy);
+    }
+  };
+
+  private float mLastTouchY;
+
   @Override
   public boolean dispatchTouchEvent(MotionEvent event) {
+    if (mIsRefreshing) {
+      return true;
+    }
     switch (event.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN:
+        mLastTouchY = event.getY();
+        break;
+      case MotionEvent.ACTION_MOVE:
+        final float deltaY = event.getY() - mLastTouchY;
+        if (mScrollState == ScrollState.NONE) {
+          if (deltaY > 0 && !mTargetView.canScrollVertically(-1)) {
+            mScrollState = ScrollState.SHOW_TOP;
+          } else if (deltaY < 0 && !mTargetView.canScrollVertically(1)) {
+            mScrollState = ScrollState.SHOW_BOTTOM;
+          }
+        }
+        mLastTouchY = event.getY();
+        break;
       case MotionEvent.ACTION_UP:
       case MotionEvent.ACTION_CANCEL: {
-        final int diff = Math.abs(getScrollY() - mOriginScrollY);
-        if (diff < mTouchSlop) {
-          resetScrollState();
-        } else {
-          final RefreshDirection direction = (getScrollY() < mOriginScrollY)
-              ? RefreshDirection.REFRESH_TOP : RefreshDirection.REFRESH_BOTTOM;
-          animateToRefreshState(direction);
-        }
+//        mScrollState = ScrollState.NONE;// FIXME: 2021/2/1
         break;
       }
     }
     return super.dispatchTouchEvent(event);
   }
 
-  private void resetScrollState() {
-    mScrollState = ScrollState.NONE;
-    scrollTo(mOriginScrollY);
-  }
-
-  private void animateToRefreshState(RefreshDirection direction) {
-    if (mRefreshPreAnimator != null) {
-      mRefreshPreAnimator.cancel();
+  private void animateToRefreshingPosition(Direction direction) {
+    if (mRefreshAnimator != null) {
+      mRefreshAnimator.cancel();
     }
-    ValueAnimator animator = ValueAnimator.ofInt(getScrollY(), getRefreshScrollY(direction));
-    animator.setDuration(getAnimationDuration(direction));
-    animator.addUpdateListener(animation -> {
-      setScrollY((int) animation.getAnimatedValue());
+    ValueAnimator animator = ValueAnimator.ofInt(getPosition(), getRefreshPosition(direction));
+    animator.setDuration(getAnimationDuration(direction, getRefreshPosition(direction)));
+    animator.addUpdateListener(animation -> setPosition((int) animation.getAnimatedValue()));
+    animator.addListener(new AnimatorListenerAdapter() {
+      @Override
+      public void onAnimationEnd(Animator animation) {
+        mRefreshAnimator = null;
+        notifyRefreshEvent();
+      }
     });
-    mRefreshPreAnimator = animator;
-    mRefreshPreAnimator.start();
+    mRefreshAnimator = animator;
+    mRefreshAnimator.start();
   }
 
-  private long getAnimationDuration(RefreshDirection direction) {
-    final long animateDuration = (direction == RefreshDirection.REFRESH_TOP)
-        ? mAnimateToStartDuration
-        : mAnimateToLoadDuration;
-    final long viewHeight = (direction == RefreshDirection.REFRESH_TOP)
-        ? mTopHeight
-        : mBottomHeight;
-    return (long) (Math.abs(getScaleY() - getRefreshScrollY(direction)) / viewHeight * animateDuration);
+  private List<OnRefreshListener> mOnRefreshListeners = new ArrayList<>();
+
+  public void addOnRefreshListener(OnRefreshListener onRefreshListener) {
+    mOnRefreshListeners.add(onRefreshListener);
   }
 
-  private int getRefreshScrollY(RefreshDirection direction) {
-    return (direction == RefreshDirection.REFRESH_TOP) ? mMinScrollY : mMaxScrollY;
+  public void removeOnRefreshListener(OnRefreshListener onRefreshListener) {
+    mOnRefreshListeners.remove(onRefreshListener);
   }
 
-  private void scrollTo(int y) {
-    scrollTo(getScrollX(), y);
+  /** RefreshView完全弹出时，通知业务方加载数据 */
+  private void notifyRefreshEvent() {
+    for (OnRefreshListener onRefreshListener : mOnRefreshListeners) {
+      onRefreshListener.onRefresh(mRefreshingDirection);
+    }
   }
 
-  private void scrollBy(int y) {
-    scrollBy(getScrollX(), y);
+  private void resetToStartPosition(boolean animation) {
+    if (!animation) {
+      scrollTo(mStartPosition);
+    } else {
+      ValueAnimator animator = ValueAnimator.ofInt(getPosition(), mStartPosition);
+      animator.setDuration(getAnimationDuration(null, mStartPosition));
+      animator.addUpdateListener(anim -> setPosition((int) anim.getAnimatedValue()));
+      animator.addListener(new AnimatorListenerAdapter() {
+        @Override
+        public void onAnimationEnd(Animator animation) {
+          mRefreshAnimator = null;
+        }
+      });
+      mRefreshAnimator = animator;
+      mRefreshAnimator.start();
+    }
   }
 
+  private long getAnimationDuration(@Nullable Direction direction, int targetPosition) {
+    if (direction == null) {
+      direction = getTargetRefreshDirection();
+    }
+    final long viewHeight = (direction == Direction.TOP) ? mTopViewHeight : mBottomViewHeight;
+    return mAnimateToRefreshDuration * Math.abs(getPosition() - targetPosition) / viewHeight;
+  }
 
-  public void setLoading(boolean loading, boolean animate) {
+  private int getRefreshPosition(Direction direction) {
+    return (direction == Direction.TOP) ? mTopPosition : mBottomPosition;
+  }
 
+  private Direction getTargetRefreshDirection() {
+    return (getPosition() < mStartPosition) ? Direction.TOP : Direction.BOTTOM;
+  }
+
+  private void scrollTo(int position) {
+    scrollTo(getScrollX(), position);
+  }
+
+  private void scrollBy(int position) {
+    scrollBy(getScrollX(), position);
+  }
+
+  private int getPosition() {
+    return getScrollY();
+  }
+
+  private void setPosition(int position) {
+    setScrollY(position);
+  }
+
+  /** 实现此方法，用于正确计算 {@link #canScrollVertically(int)} */
+  @Override
+  protected int computeVerticalScrollRange() {
+    return getHeight() + mTopViewHeight + mBottomViewHeight;
   }
 }

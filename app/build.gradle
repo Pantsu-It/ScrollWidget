@@ -27,12 +27,19 @@ android {
 
 }
 
-dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+repositories {
+    flatDir {
+        dirs 'libs' //this way we can find the .aar file in libs folder
+    }
+}
 
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation(name:'rxandroid-2.1.1', ext:'aar')
     implementation 'androidx.appcompat:appcompat:1.2.0'
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
     implementation 'androidx.recyclerview:recyclerview:1.1.0'
+    implementation files('libs/rxjava-2.2.20.jar')
 }
