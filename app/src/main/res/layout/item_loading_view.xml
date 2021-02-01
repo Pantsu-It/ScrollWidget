@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.pantsu.scrollwidget.view.view.ChatLoadStatus xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content">
+
+  <ProgressBar
+    android:id="@+id/progress"
+    android:layout_width="40dp"
+    android:layout_height="40dp"
+    android:layout_gravity="center"
+    android:max="100"
+    android:progressTint="#000000"
+    android:progressDrawable="@drawable/progressbar_update_circle_loading" />
+</com.pantsu.scrollwidget.view.view.ChatLoadStatus>
