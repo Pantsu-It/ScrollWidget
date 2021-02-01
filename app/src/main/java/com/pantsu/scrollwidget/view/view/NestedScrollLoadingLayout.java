@@ -24,7 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.pantsu.scrollwidget.R;
 
-public class NestedScrollRefreshLayout extends LinearLayout implements NestedScrollingParent2 {
+public class NestedScrollLoadingLayout extends LinearLayout implements NestedScrollingParent2 {
 
   private static final long ANIMATE_TO_START_DURATION = 300L;
 
@@ -39,12 +39,12 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
     BOTTOM
   }
 
-  public interface OnRefreshListener {
-    void onRefresh(Direction direction);
+  public interface OnLoadListener {
+    void onLoad(Direction direction);
   }
 
   private RecyclerView mTargetView;
-  private View mTopRefreshView, mBottomRefreshView;
+  private View mTopLoadView, mBottomLoadView;
 
   private NestedScrollingParentHelper mNestedScrollHelper;
   private int mTopViewHeight, mBottomViewHeight;
@@ -57,15 +57,15 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   private ScrollState mScrollState = ScrollState.NONE;
 
   /** 过渡到Loading状态的动画 */
-  private Animator mRefreshAnimator;
+  private Animator mLoadAnimator;
 
-  private long mAnimateToRefreshDuration = ANIMATE_TO_START_DURATION;
+  private long mAnimateToLoadDuration = ANIMATE_TO_START_DURATION;
 
-  public NestedScrollRefreshLayout(Context context) {
+  public NestedScrollLoadingLayout(Context context) {
     super(context);
   }
 
-  public NestedScrollRefreshLayout(Context context, AttributeSet attrs) {
+  public NestedScrollLoadingLayout(Context context, AttributeSet attrs) {
     super(context, attrs);
     mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
@@ -78,8 +78,8 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
     mTargetView = findViewById(R.id.recycler_view);
     mTargetView.addOnScrollListener(mOnScrollListener);
 
-    mTopRefreshView = getChildAt(0);
-    mBottomRefreshView = getChildAt(getChildCount() - 1);
+    mTopLoadView = getChildAt(0);
+    mBottomLoadView = getChildAt(getChildCount() - 1);
 
     getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
       @Override
@@ -91,8 +91,8 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   }
 
   private void initParam() {
-    mTopViewHeight = mTopRefreshView.getMeasuredHeight();
-    mBottomViewHeight = mBottomRefreshView.getMeasuredHeight();
+    mTopViewHeight = mTopLoadView.getMeasuredHeight();
+    mBottomViewHeight = mBottomLoadView.getMeasuredHeight();
     mTopPosition = 0;
     mStartPosition = mTopViewHeight;
     mBottomPosition = mTopViewHeight + mBottomViewHeight;
@@ -102,50 +102,50 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
     scrollTo(mTopViewHeight);
   }
 
-  private boolean mIsRefreshing;
-  private Direction mRefreshingDirection;
+  private boolean mIsLoading;
+  private Direction mLoadingDirection;
 
-  public boolean isRefreshing() {
-    return mIsRefreshing;
+  public boolean isLoading() {
+    return mIsLoading;
   }
 
-  private boolean mShowTopRefreshView = true;
-  private boolean mShowBottomRefreshView = true;
+  private boolean mShowTopLoadView = true;
+  private boolean mShowBottomLoadView = true;
 
-  public void setShowTopRefreshView(boolean showTopRefreshView) {
-    mShowTopRefreshView = showTopRefreshView;
+  public void setShowTopLoadingView(boolean showTopLoadView) {
+    mShowTopLoadView = showTopLoadView;
   }
 
-  public void setShowBottomRefreshView(boolean showBottomRefreshView) {
-    mShowBottomRefreshView = showBottomRefreshView;
+  public void setShowBottomLoadingView(boolean showBottomLoadView) {
+    mShowBottomLoadView = showBottomLoadView;
   }
 
   public int getTargetViewOffset() {
     return Math.abs(getPosition() - mStartPosition);
   }
 
-  public void startRefreshing(Direction direction) {
-    if (mIsRefreshing && mRefreshingDirection == direction) {
+  public void startLoading(Direction direction) {
+    if (mIsLoading && mLoadingDirection == direction) {
       return;
     }
-    if (mRefreshAnimator != null && mRefreshAnimator.isStarted()) {
-      mRefreshAnimator.cancel();
+    if (mLoadAnimator != null && mLoadAnimator.isStarted()) {
+      mLoadAnimator.cancel();
     }
-    mIsRefreshing = true;
-    mRefreshingDirection = direction;
-    animateToRefreshingPosition(direction);
+    mIsLoading = true;
+    mLoadingDirection = direction;
+    animateToLoadingPosition(direction);
   }
 
-  public void stopRefreshing(boolean animation) {
-    if (!mIsRefreshing && mRefreshAnimator == null) {
+  public void stopLoading(boolean animation) {
+    if (!mIsLoading && mLoadAnimator == null) {
       return;
     }
-    if (mRefreshAnimator != null && mRefreshAnimator.isStarted()) {
-      mRefreshAnimator.cancel();
-      mRefreshAnimator = null;
+    if (mLoadAnimator != null && mLoadAnimator.isStarted()) {
+      mLoadAnimator.cancel();
+      mLoadAnimator = null;
     }
-    mIsRefreshing = false;
-    mRefreshingDirection = null;
+    mIsLoading = false;
+    mLoadingDirection = null;
     resetToStartPosition(animation);
   }
 
@@ -203,7 +203,7 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   }
 
   private void handleNestedScrollTop(int deltaY, int[] consumed) {
-    if (!mShowTopRefreshView) {
+    if (!mShowTopLoadView) {
       return;
     }
     if (getPosition() <= mStartPosition && !mTargetView.canScrollVertically(-1)) {//展开Top
@@ -220,7 +220,7 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
   }
 
   private void handleNestedScrollBottom(int deltaY, int[] consumed) {
-    if (!mShowBottomRefreshView) {
+    if (!mShowBottomLoadView) {
       return;
     }
     if (getPosition() >= mStartPosition && !mTargetView.canScrollVertically(1)) {
@@ -244,10 +244,10 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
         if (diff < mTouchSlop) {
           resetToStartPosition(false);
         } else {
-          final Direction direction = getTargetRefreshDirection();
-          mIsRefreshing = true;
-          mRefreshingDirection = direction;
-          animateToRefreshingPosition(direction);
+          final Direction direction = getTargetLoadDirection();
+          mIsLoading = true;
+          mLoadingDirection = direction;
+          animateToLoadingPosition(direction);
         }
       }
     }
@@ -262,7 +262,7 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
 
   @Override
   public boolean dispatchTouchEvent(MotionEvent event) {
-    if (mIsRefreshing) {
+    if (mIsLoading) {
       return true;
     }
     switch (event.getActionMasked()) {
@@ -289,38 +289,38 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
     return super.dispatchTouchEvent(event);
   }
 
-  private void animateToRefreshingPosition(Direction direction) {
-    if (mRefreshAnimator != null) {
-      mRefreshAnimator.cancel();
+  private void animateToLoadingPosition(Direction direction) {
+    if (mLoadAnimator != null) {
+      mLoadAnimator.cancel();
     }
-    ValueAnimator animator = ValueAnimator.ofInt(getPosition(), getRefreshPosition(direction));
-    animator.setDuration(getAnimationDuration(direction, getRefreshPosition(direction)));
+    ValueAnimator animator = ValueAnimator.ofInt(getPosition(), getLoadPosition(direction));
+    animator.setDuration(getAnimationDuration(direction, getLoadPosition(direction)));
     animator.addUpdateListener(animation -> setPosition((int) animation.getAnimatedValue()));
     animator.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd(Animator animation) {
-        mRefreshAnimator = null;
-        notifyRefreshEvent();
+        mLoadAnimator = null;
+        notifyLoadEvent();
       }
     });
-    mRefreshAnimator = animator;
-    mRefreshAnimator.start();
+    mLoadAnimator = animator;
+    mLoadAnimator.start();
   }
 
-  private List<OnRefreshListener> mOnRefreshListeners = new ArrayList<>();
+  private List<OnLoadListener> mOnLoadListeners = new ArrayList<>();
 
-  public void addOnRefreshListener(OnRefreshListener onRefreshListener) {
-    mOnRefreshListeners.add(onRefreshListener);
+  public void addOnLoadListener(OnLoadListener onLoadListener) {
+    mOnLoadListeners.add(onLoadListener);
   }
 
-  public void removeOnRefreshListener(OnRefreshListener onRefreshListener) {
-    mOnRefreshListeners.remove(onRefreshListener);
+  public void removeOnLoadListener(OnLoadListener onLoadListener) {
+    mOnLoadListeners.remove(onLoadListener);
   }
 
-  /** RefreshView完全弹出时，通知业务方加载数据 */
-  private void notifyRefreshEvent() {
-    for (OnRefreshListener onRefreshListener : mOnRefreshListeners) {
-      onRefreshListener.onRefresh(mRefreshingDirection);
+  /** LoadView完全弹出时，通知业务方加载数据 */
+  private void notifyLoadEvent() {
+    for (OnLoadListener onLoadListener : mOnLoadListeners) {
+      onLoadListener.onLoad(mLoadingDirection);
     }
   }
 
@@ -334,27 +334,27 @@ public class NestedScrollRefreshLayout extends LinearLayout implements NestedScr
       animator.addListener(new AnimatorListenerAdapter() {
         @Override
         public void onAnimationEnd(Animator animation) {
-          mRefreshAnimator = null;
+          mLoadAnimator = null;
         }
       });
-      mRefreshAnimator = animator;
-      mRefreshAnimator.start();
+      mLoadAnimator = animator;
+      mLoadAnimator.start();
     }
   }
 
   private long getAnimationDuration(@Nullable Direction direction, int targetPosition) {
     if (direction == null) {
-      direction = getTargetRefreshDirection();
+      direction = getTargetLoadDirection();
     }
     final long viewHeight = (direction == Direction.TOP) ? mTopViewHeight : mBottomViewHeight;
-    return mAnimateToRefreshDuration * Math.abs(getPosition() - targetPosition) / viewHeight;
+    return mAnimateToLoadDuration * Math.abs(getPosition() - targetPosition) / viewHeight;
   }
 
-  private int getRefreshPosition(Direction direction) {
+  private int getLoadPosition(Direction direction) {
     return (direction == Direction.TOP) ? mTopPosition : mBottomPosition;
   }
 
-  private Direction getTargetRefreshDirection() {
+  private Direction getTargetLoadDirection() {
     return (getPosition() < mStartPosition) ? Direction.TOP : Direction.BOTTOM;
   }
 

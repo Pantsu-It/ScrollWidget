@@ -8,7 +8,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.pantsu.scrollwidget.view.data.MyListAdapter;
-import com.pantsu.scrollwidget.view.view.NestedScrollRefreshLayout;
+import com.pantsu.scrollwidget.view.view.NestedScrollLoadingLayout;
 
 import io.reactivex.Single;
 import io.reactivex.android.schedulers.AndroidSchedulers;
@@ -16,15 +16,15 @@ import io.reactivex.schedulers.Schedulers;
 
 public class PageList {
 
-  private NestedScrollRefreshLayout mRefreshLayout;
+  private NestedScrollLoadingLayout mLoadingLayout;
   private RecyclerView mRecyclerView;
   private MyListAdapter mAdapter;
 
   private int mFromId, mToId;
   private int mMinId, mMaxId;
 
-  public PageList(NestedScrollRefreshLayout refreshLayout, RecyclerView recyclerView, MyListAdapter adapter) {
-    mRefreshLayout = refreshLayout;
+  public PageList(NestedScrollLoadingLayout refreshLayout, RecyclerView recyclerView, MyListAdapter adapter) {
+    mLoadingLayout = refreshLayout;
     mRecyclerView = recyclerView;
     mAdapter = adapter;
 
@@ -94,15 +94,15 @@ public class PageList {
     if (keepPosition) {
       String firstItem = mAdapter.getData().get(0);
       int index = newData.indexOf(firstItem);
-      int scrollOffset = mRefreshLayout.getTargetViewOffset();
+      int scrollOffset = mLoadingLayout.getTargetViewOffset();
       mRecyclerView.post(() -> mLayoutManager.scrollToPositionWithOffset(Math.max(index, 0), scrollOffset));
     }
 
     // 停止刷新
     boolean animation = mAdapter.getData().size() == newData.size();
-    mRefreshLayout.stopRefreshing(animation);
+    mLoadingLayout.stopLoading(animation);
 
-    mRefreshLayout.setShowTopRefreshView(hasMoreOld());
-    mRefreshLayout.setShowBottomRefreshView(hasMoreNew());
+    mLoadingLayout.setShowTopLoadingView(hasMoreOld());
+    mLoadingLayout.setShowBottomLoadingView(hasMoreNew());
   }
 }

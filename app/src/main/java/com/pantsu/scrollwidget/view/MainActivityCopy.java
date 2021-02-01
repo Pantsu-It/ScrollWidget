@@ -7,7 +7,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.pantsu.scrollwidget.R;
 import com.pantsu.scrollwidget.view.data.MyListAdapter;
-import com.pantsu.scrollwidget.view.view.NestedScrollRefreshLayout;
+import com.pantsu.scrollwidget.view.view.NestedScrollLoadingLayout;
 
 public class MainActivityCopy extends AppCompatActivity {
 
@@ -24,14 +24,14 @@ public class MainActivityCopy extends AppCompatActivity {
     recyclerView.setLayoutManager(new LinearLayoutManager(this));
     recyclerView.setAdapter(adapter);
 
-    PageList pageList = new PageList((NestedScrollRefreshLayout) recyclerView.getParent(), recyclerView, adapter);
+    PageList pageList = new PageList((NestedScrollLoadingLayout) recyclerView.getParent(), recyclerView, adapter);
     mPageList = pageList;
 
-    NestedScrollRefreshLayout nestedScrollRefreshLayout = findViewById(R.id.refresh_layout);
-    nestedScrollRefreshLayout.addOnRefreshListener(direction -> {
-      if (direction == NestedScrollRefreshLayout.Direction.TOP) {
+    NestedScrollLoadingLayout nestedScrollLoadingLayout = findViewById(R.id.refresh_layout);
+    nestedScrollLoadingLayout.addOnLoadListener(direction -> {
+      if (direction == NestedScrollLoadingLayout.Direction.TOP) {
         mPageList.loadMoreOld();
-      } else if (direction == NestedScrollRefreshLayout.Direction.BOTTOM) {
+      } else if (direction == NestedScrollLoadingLayout.Direction.BOTTOM) {
         mPageList.loadMoreNew();
       }
     });

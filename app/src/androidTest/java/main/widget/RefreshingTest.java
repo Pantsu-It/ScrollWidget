@@ -4,11 +4,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.pantsu.scrollwidget.view.view.NestedScrollRefreshLayout;
+import com.pantsu.scrollwidget.view.view.NestedScrollLoadingLayout;
 
-public class RefreshingTest {
+public class LoadingingTest {
 
-  private NestedScrollRefreshLayout mNestedScrollRefreshLayout;
+  private NestedScrollLoadingLayout mNestedScrollLoadingLayout;
 
   @Before
   public void init() throws Exception {
